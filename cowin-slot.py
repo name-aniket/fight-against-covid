@@ -2,13 +2,17 @@ import requests
 import time
 import json
 import hashlib
+import tkinter
+from sys import exit
 from datetime import date
+from tkinter import messagebox
 
 BASE_URL = "https://cdn-api.co-vin.in/api"
-MOBILE_NUMBER = "7981645735"
-PINCODES = ["221003","221002","221005","221311"]
 MIN_CAPACITY = 5
-MIN_AGE = 45
+MIN_AGE = 18
+
+root = tkinter.Tk()
+root.withdraw()
 
 def wait_no_of_seconds(seconds = 15):
     time.sleep(seconds)
@@ -16,28 +20,25 @@ def wait_no_of_seconds(seconds = 15):
 def get_input(message = "Enter the OTP : "):
     return input(message)    
 
-def authenticate():
+
+def post_request(url, body):
     return requests.post(
-        url=BASE_URL + "/v2/auth/public/generateOTP",
-        json={
-            "mobile" : MOBILE_NUMBER
-        }
-    )
-    
-def authorize(txnId, OTP):
-    return requests.post(
-        url  = BASE_URL + "/v2/auth/public/confirmOTP",
-        json = {
-            "otp" : hashlib.sha256(str(OTP).encode("utf-8")).hexdigest(),
-            "txnId" : txnId
-        }
+        url=url,
+        json=body
     )
 
-def findByPin(bearer_token):
-    for pincode in PINCODES:
+def get_request(url, params, headers = {}):
+    return requests.get(
+        url=url,
+        params=params,
+        headers=headers
+    )
+
+def findByPin(bearer_token, pincodes):
+    for pincode in pincodes:
         result = {}
         while True:
-            response = requests.get(
+            response = get_request(
                 url = BASE_URL + "/v2/appointment/sessions/public/findByPin",
                 params = {
                     "pincode" : pincode,
@@ -61,7 +62,7 @@ def display_centers_available_slots(result):
     for center in result['sessions']:
         age = int(center['min_age_limit'])
         capacity = int(center['available_capacity'])
-        if age == MIN_AGE and capacity >= CAPACITY:
+        if age == MIN_AGE and capacity >= MIN_CAPACITY:
             print("Pincode : {}".format(center['pincode']))
             print("Center name : {}".format(center['name']))
             print("Address : {}".format(center['address']))
@@ -73,31 +74,61 @@ def display_centers_available_slots(result):
             print("Fee : {}".format(center['fee']))
             print("Minimum Age : {}+".format(center['min_age_limit']))
             print("Vaccine : {}".format(center['vaccine']))
-            print("Pincode : {}".format(center['pincode']))
             print("Slots")
             for slot in center['slots']:
                 print("\t{}".format(slot))
+            """
+                TODO Create a voice alert
+                TODO The message box needs to delete when user selects NO
+            """
+            response = messagebox.askyesno(
+                title = "Free slots found",
+                message = "Pincode : {}\nAvailable Slots : {}\nCenter Name : {}\n".format(
+                    center['pincode'],
+                    center['available_capacity'],
+                    center['name']
+                )
+            )
+            if response:
+                exit(0)
             print("**************************************************************")
 
-def main():
-    response_authenticate = authenticate()
-
+def main(): 
+    pincodes = get_input(message = "Enter list of pincodes comma seprated : ").split(",")
+    mobile_number = get_input(message = "Enter you mobile number : ")
+    response_authenticate = post_request(
+        url = BASE_URL + "/v2/auth/public/generateOTP",
+        body = {
+            "mobile" : mobile_number
+        }
+    )
     while True:
         if response_authenticate.text == "OTP Already Sent":
             print("OTP Already Sent")
             wait_no_of_seconds()
-            response_authenticate = authenticate()
+            response_authenticate = post_request(
+                url = BASE_URL + "/v2/auth/public/generateOTP",
+                body = {
+                    "mobile" : mobile_number
+                }
+            )
         else:
             break
-    
     txnId = json.loads(response_authenticate.text)['txnId']
-    
+    print(txnId)
     OTP = get_input()
-    
-    bearer_token = json.loads(authorize(txnId=txnId, OTP=OTP).text)['token']
-    
+    bearer_token = json.loads(
+        post_request(
+            url = BASE_URL + "/v2/auth/public/confirmOTP",
+            body = {
+                "otp" : hashlib.sha256(str(OTP).encode("utf-8")).hexdigest(),
+                "txnId" : txnId
+            }
+        ).text
+    )['token']
+    print(bearer_token)
     while True:
-        findByPin(bearer_token=bearer_token)
+        findByPin(bearer_token=bearer_token, pincodes=pincodes)
         print("TRYING AGAIN IN 2 MINUTES......")
         wait_no_of_seconds(seconds=120)
 
