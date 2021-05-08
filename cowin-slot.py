@@ -6,22 +6,16 @@ import tkinter
 from sys import exit
 from datetime import date
 from tkinter import messagebox
-"""
-    "For 18+" 221003
-    "For 45+" 221005,221003
-"""
+
 BASE_URL = "https://cdn-api.co-vin.in/api"
+GENERATE_OTP_URL = "/v2/auth/public/generateOTP"
+CONFIRM_OTP_URL = "/v2/auth/public/confirmOTP"
 MIN_CAPACITY = 5
-MIN_AGE = 18
+MIN_AGE = 45
 
-root = tkinter.Tk()
-root.withdraw()
 
-def wait_no_of_seconds(seconds = 15):
+def wait_no_of_seconds(seconds=15):
     time.sleep(seconds)
-
-def get_input(message = "Enter the OTP : "):
-    return input(message)    
 
 
 def post_request(url, body):
@@ -30,36 +24,122 @@ def post_request(url, body):
         json=body
     )
 
-def get_request(url, params, headers = {}):
+
+def get_request(url, params, headers={}):
     return requests.get(
         url=url,
         params=params,
         headers=headers
     )
 
+
+def get_error_message(error_code):
+    return {
+        '401': 'Unauthenticated Access',
+        '403': 'Request Blocked',
+        '500': 'Internal Server Error'
+    }[error_code]
+
+
+def notification_pop_up(center):
+    root = tkinter.Tk()
+    root.withdraw()
+    """
+        TODO Create a voice alert
+        TODO The message box needs to delete when user selects NO
+    """
+    response = messagebox.askyesno(
+        title="Free slots found",
+        message="Pincode : {}\nAvailable Slots : {}\nCenter Name : {}\nVaccine : {}\n".format(
+            center['pincode'],
+            center['available_capacity'],
+            center['name'],
+            center['vaccine']
+        )
+    )
+    if response:
+        exit(0)
+    else:
+        root.destroy()
+
+
+def authenticate():
+    """
+        Takes mobile number
+        Returns txnId
+    """
+    mobile_number = input("Enter mobile number : ")
+    response = post_request(
+        url=BASE_URL + GENERATE_OTP_URL,
+        body={
+            "mobile": mobile_number
+        }
+    )
+    if response.status_code == 200:
+        """
+            Check if OTP sent within last few minutes
+        """
+        while True:
+            if response.text == "OTP Already Sent":
+                print("OTP Already Sent")
+                wait_no_of_seconds()
+                response = post_request(
+                    url=BASE_URL + GENERATE_OTP_URL,
+                    body={
+                        "mobile": mobile_number
+                    }
+                )
+            else:
+                return json.loads(response.text)['txnId']
+    else:
+        print(get_error_message(str(response.status_code)))
+        exit(1)
+
+
+def authorization(txnId):
+    """
+        Takes OTP and Transaction ID (txnId)
+        Returns authorization token
+    """
+    otp = input("Enter OTP : ")
+    response = post_request(
+        url=BASE_URL + CONFIRM_OTP_URL,
+        body={
+            "otp": hashlib.sha256(str(otp).encode("utf-8")).hexdigest(),
+            "txnId": txnId
+        }
+    )
+    if response.status_code == 200:
+        return json.loads(response.text)['token']
+    else:
+        print(get_error_message(str(response.status_code)))
+        exit(1)
+
+
 def findByPin(bearer_token, pincodes):
     for pincode in pincodes:
         result = {}
         while True:
             response = get_request(
-                url = BASE_URL + "/v2/appointment/sessions/public/findByPin",
-                params = {
-                    "pincode" : pincode,
+                url=BASE_URL + "/v2/appointment/sessions/public/findByPin",
+                params={
+                    "pincode": pincode,
                     "date": date.today().strftime("%d-%m-%y")
                 },
-                headers = {
+                headers={
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 Edg/90.0.818.51",
                     "Authorization": "Bearer " + bearer_token,
                     "Content-type": "application/json"
-                    }
-                )
-            if response.status_code in [403, 401, 400]:
-                print("Got status code {}! Trying again after 15 sec.".format(str(response.status_code)))
-                wait_no_of_seconds(15)
+                }
+            )
+            if response.status_code == 401:
+                txnId = authenticate()
+                bearer_token = authorization(txnId=txnId)
             else:
                 result.update(json.loads(response.text))
                 break
         display_centers_available_slots(result)
+
 
 def display_centers_available_slots(result):
     for center in result['sessions']:
@@ -72,7 +152,8 @@ def display_centers_available_slots(result):
             print("State : {}".format(center['state_name']))
             print("District : {}".format(center['district_name']))
             print("Block Name : {}".format(center['block_name']))
-            print("Available Capacity : {}".format(center['available_capacity']))
+            print("Available Capacity : {}".format(
+                center['available_capacity']))
             print("Fee type : {}".format(center['fee_type']))
             print("Fee : {}".format(center['fee']))
             print("Minimum Age : {}+".format(center['min_age_limit']))
@@ -80,58 +161,22 @@ def display_centers_available_slots(result):
             print("Slots")
             for slot in center['slots']:
                 print("\t{}".format(slot))
-            """
-                TODO Create a voice alert
-                TODO The message box needs to delete when user selects NO
-            """
-            response = messagebox.askyesno(
-                title = "Free slots found",
-                message = "Pincode : {}\nAvailable Slots : {}\nCenter Name : {}\n".format(
-                    center['pincode'],
-                    center['available_capacity'],
-                    center['name']
-                )
-            )
-            if response:
-                exit(0)
+
+            notification_pop_up(center=center)
             print("**************************************************************")
 
-def main(): 
-    pincodes = get_input(message = "Enter list of pincodes comma seprated : ").split(",")
-    mobile_number = get_input(message = "Enter you mobile number : ")
-    response_authenticate = post_request(
-        url = BASE_URL + "/v2/auth/public/generateOTP",
-        body = {
-            "mobile" : mobile_number
-        }
-    )
-    while True:
-        if response_authenticate.text == "OTP Already Sent":
-            print("OTP Already Sent")
-            wait_no_of_seconds()
-            response_authenticate = post_request(
-                url = BASE_URL + "/v2/auth/public/generateOTP",
-                body = {
-                    "mobile" : mobile_number
-                }
-            )
-        else:
-            break
-    txnId = json.loads(response_authenticate.text)['txnId']
-    OTP = get_input()
-    bearer_token = json.loads(
-        post_request(
-            url = BASE_URL + "/v2/auth/public/confirmOTP",
-            body = {
-                "otp" : hashlib.sha256(str(OTP).encode("utf-8")).hexdigest(),
-                "txnId" : txnId
-            }
-        ).text
-    )['token']
+
+def main():
+    pincodes = input("Enter list of pincodes comma seprated : ").split(",")
+
+    txnId = authenticate()
+    bearer_token = authorization(txnId=txnId)
+
     while True:
         findByPin(bearer_token=bearer_token, pincodes=pincodes)
-        print("TRYING AGAIN IN 2 MINUTES......")
+        print("Trying again in 120 seconds ......")
         wait_no_of_seconds(seconds=120)
+
 
 if __name__ == "__main__":
     main()
