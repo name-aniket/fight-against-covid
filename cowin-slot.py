@@ -6,10 +6,7 @@ import tkinter
 from sys import exit
 from datetime import date
 from tkinter import messagebox
-"""
-    "For 18+" 221003
-    "For 45+" 221005,221003
-"""
+
 BASE_URL = "https://cdn-api.co-vin.in/api"
 GENERATE_OTP_URL = "/v2/auth/public/generateOTP"
 CONFIRM_OTP_URL = "/v2/auth/public/confirmOTP"
