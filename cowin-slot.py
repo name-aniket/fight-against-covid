@@ -6,7 +6,10 @@ import tkinter
 from sys import exit
 from datetime import date
 from tkinter import messagebox
-
+"""
+    "For 18+" 221003
+    "For 45+" 221005,221003
+"""
 BASE_URL = "https://cdn-api.co-vin.in/api"
 MIN_CAPACITY = 5
 MIN_AGE = 18
@@ -115,7 +118,6 @@ def main():
         else:
             break
     txnId = json.loads(response_authenticate.text)['txnId']
-    print(txnId)
     OTP = get_input()
     bearer_token = json.loads(
         post_request(
@@ -126,7 +128,6 @@ def main():
             }
         ).text
     )['token']
-    print(bearer_token)
     while True:
         findByPin(bearer_token=bearer_token, pincodes=pincodes)
         print("TRYING AGAIN IN 2 MINUTES......")
