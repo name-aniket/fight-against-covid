@@ -5,7 +5,7 @@ import hashlib
 from datetime import date
 
 BASE_URL = "https://cdn-api.co-vin.in/api"
-MOBILE_NUMBER = "7981645735"
+MOBILE_NUMBER = "<Enter your registered mobile number with cowin>"
 PINCODES = ["221003","221002","221005","221311"]
 MIN_CAPACITY = 5
 MIN_AGE = 45
