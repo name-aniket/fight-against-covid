@@ -4,14 +4,68 @@ import json
 import hashlib
 import tkinter
 from sys import exit
-from datetime import date
+from os import system
+from datetime import date, timedelta
 from tkinter import messagebox
 
+"""
+    GLOBAL variables
+"""
+TXNID = ""
+BEARER_TOKEN = ""
+
+"""
+    Co-win base URL
+"""
 BASE_URL = "https://cdn-api.co-vin.in/api"
+
+"""
+    Generate OTP endpoint
+"""
 GENERATE_OTP_URL = "/v2/auth/public/generateOTP"
+
+"""
+    Confirm OTP endpoint
+"""
 CONFIRM_OTP_URL = "/v2/auth/public/confirmOTP"
-MIN_CAPACITY = 5
+
+"""
+    Provided full path of the sound file
+"""
+ALERT_SOUND = "~/Documents/CODEBASE/fight-againt-covid/notification_sound.mp3"
+
+"""
+    Change accordingly
+    For 18+ change to 18
+    For 45+ change to 45
+"""
 MIN_AGE = 45
+
+"""
+    Atleast this many slots should be available
+    otherwise the time by you will login
+    to book the slots you might not find any slots 
+"""
+MIN_CAPACITY = 10
+
+"""
+    This list will contain the all the centers which
+    you have marked NO from the notfication pop-up 
+"""
+CENTERS = []
+
+"""
+    Your district code.
+    For getting distrit code follow the following steps:
+        1) Get your state id by clicking this link
+            (i) https://cdn-api.co-vin.in/api/v2/admin/location/states
+        
+        2) Get you district code by clicking this link
+            (i) https://cdn-api.co-vin.in/api/v2/admin/location/districts/{state_id}
+            
+            NOTE change the {state_id} with the id you got from the earlier link
+"""
+DISTRICT_ID = 696
 
 
 def wait_no_of_seconds(seconds=15):
@@ -35,6 +89,7 @@ def get_request(url, params, headers={}):
 
 def get_error_message(error_code):
     return {
+        '400': 'Not Found',
         '401': 'Unauthenticated Access',
         '403': 'Request Blocked',
         '500': 'Internal Server Error'
@@ -50,16 +105,18 @@ def notification_pop_up(center):
     """
     response = messagebox.askyesno(
         title="Free slots found",
-        message="Pincode : {}\nAvailable Slots : {}\nCenter Name : {}\nVaccine : {}\n".format(
+        message="Pincode : {}\nAvailable Slots : {}\nCenter Name : {}\nVaccine : {}\nAge : {}\n".format(
             center['pincode'],
             center['available_capacity'],
             center['name'],
-            center['vaccine']
+            center['vaccine'],
+            center['min_age_limit']
         )
     )
     if response:
         exit(0)
     else:
+        CENTERS.append(center['center_id'])
         root.destroy()
 
 
@@ -75,7 +132,7 @@ def authenticate():
             "mobile": mobile_number
         }
     )
-    if response.status_code == 200:
+    if response.status_code in [200, 400]:
         """
             Check if OTP sent within last few minutes
         """
@@ -98,7 +155,7 @@ def authenticate():
 
 def authorization(txnId):
     """
-        Takes OTP and Transaction ID (txnId)
+        Takes Transaction ID (txnId)
         Returns authorization token
     """
     otp = input("Enter OTP : ")
@@ -116,36 +173,32 @@ def authorization(txnId):
         exit(1)
 
 
-def findByPin(bearer_token, pincodes):
-    for pincode in pincodes:
-        result = {}
-        while True:
-            response = get_request(
-                url=BASE_URL + "/v2/appointment/sessions/public/findByPin",
-                params={
-                    "pincode": pincode,
-                    "date": date.today().strftime("%d-%m-%y")
-                },
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 Edg/90.0.818.51",
-                    "Authorization": "Bearer " + bearer_token,
-                    "Content-type": "application/json"
-                }
-            )
-            if response.status_code == 401:
-                txnId = authenticate()
-                bearer_token = authorization(txnId=txnId)
-            else:
-                result.update(json.loads(response.text))
-                break
-        display_centers_available_slots(result)
+def findByDistrict(bearer_token, district_id=DISTRICT_ID):
+    response = get_request(
+        url=BASE_URL + "/v2/appointment/sessions/public/findByDistrict",
+        params={
+            "district_id": district_id,
+            "date": (date.today() + timedelta(days=1)).strftime("%d-%m-%y")
+        },
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 Edg/90.0.818.51",
+            "Authorization": "Bearer " + bearer_token,
+            "Content-type": "application/json"
+        }
+    )
+    if response.status_code == 401:
+        global TXNID, BEARER_TOKEN
+        TXNID = authenticate()
+        BEARER_TOKEN = authorization(txnId=TXNID)
+    elif response.status_code == 200:
+        display_centers_available_slots(json.loads(response.text))
 
 
 def display_centers_available_slots(result):
     for center in result['sessions']:
         age = int(center['min_age_limit'])
         capacity = int(center['available_capacity'])
-        if age == MIN_AGE and capacity >= MIN_CAPACITY:
+        if age == MIN_AGE and capacity >= MIN_CAPACITY center['center_id'] not in CENTERS:
             print("Pincode : {}".format(center['pincode']))
             print("Center name : {}".format(center['name']))
             print("Address : {}".format(center['address']))
@@ -162,20 +215,23 @@ def display_centers_available_slots(result):
             for slot in center['slots']:
                 print("\t{}".format(slot))
 
+            for _ in range(3):
+                system("mpg123 " + ALERT_SOUND)
+                time.sleep(1)
+
             notification_pop_up(center=center)
             print("**************************************************************")
 
 
 def main():
-    pincodes = input("Enter list of pincodes comma seprated : ").split(",")
-
-    txnId = authenticate()
-    bearer_token = authorization(txnId=txnId)
+    global TXNID, BEARER_TOKEN
+    TXNID = authenticate()
+    BEARER_TOKEN = authorization(txnId=TXNID)
 
     while True:
-        findByPin(bearer_token=bearer_token, pincodes=pincodes)
-        print("Trying again in 120 seconds ......")
-        wait_no_of_seconds(seconds=120)
+        findByDistrict(bearer_token=BEARER_TOKEN)
+        print("Trying again in 4 seconds seconds ......")
+        wait_no_of_seconds(seconds=4)
 
 
 if __name__ == "__main__":
