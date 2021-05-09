@@ -92,11 +92,12 @@ def notification_pop_up(center):
     """
     response = messagebox.askyesno(
         title="Free slots found",
-        message="Pincode : {}\nAvailable Slots : {}\nCenter Name : {}\nVaccine : {}\n".format(
+        message="Pincode : {}\nAvailable Slots : {}\nCenter Name : {}\nVaccine : {}\nAge : {}\n".format(
             center['pincode'],
             center['available_capacity'],
             center['name'],
-            center['vaccine']
+            center['vaccine'],
+            center['min_age_limit']
         )
     )
     if response:
