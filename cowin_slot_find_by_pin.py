@@ -39,7 +39,7 @@ ALERT_SOUND = "~/Documents/CODEBASE/fight-againt-covid/notification_sound.mp3"
     For 18+ change to 18
     For 45+ change to 45
 """
-MIN_AGE = 45
+MIN_AGE = 18
 
 """
     Atleast this many slots should be available
@@ -63,14 +63,6 @@ def post_request(url, body):
     return requests.post(
         url=url,
         json=body
-    )
-
-
-def get_request(url, params, headers={}):
-    return requests.get(
-        url=url,
-        params=params,
-        headers=headers
     )
 
 
@@ -163,9 +155,9 @@ def authorization(txnId):
         exit(1)
 
 
-def findByPin(bearer_token, pincodes):
+def findByPin(bearer_token, pincodes, session):
     for pincode in pincodes:
-        response = get_request(
+        response = session.get(
             url=BASE_URL + "/v2/appointment/sessions/public/findByPin",
             params={
                 "pincode": pincode,
@@ -221,8 +213,10 @@ def main():
     TXNID = authenticate()
     BEARER_TOKEN = authorization(txnId=TXNID)
 
+    session = requests.Session()
     while True:
-        findByPin(bearer_token=BEARER_TOKEN, pincodes=pincodes)
+        findByPin(bearer_token=BEARER_TOKEN,
+                  pincodes=pincodes, session=session)
         seconds_to_wait = 300 // (100 // len(pincodes)) + 1
         print("Trying again in {} seconds ......".format(seconds_to_wait))
         wait_no_of_seconds(seconds=seconds_to_wait)

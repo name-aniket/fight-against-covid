@@ -39,7 +39,7 @@ ALERT_SOUND = "~/Documents/CODEBASE/fight-againt-covid/notification_sound.mp3"
     For 18+ change to 18
     For 45+ change to 45
 """
-MIN_AGE = 45
+MIN_AGE = 18
 
 """
     Atleast this many slots should be available
@@ -173,8 +173,8 @@ def authorization(txnId):
         exit(1)
 
 
-def findByDistrict(bearer_token, district_id=DISTRICT_ID):
-    response = get_request(
+def findByDistrict(bearer_token, session, district_id=DISTRICT_ID):
+    response = session.get(
         url=BASE_URL + "/v2/appointment/sessions/public/findByDistrict",
         params={
             "district_id": district_id,
@@ -198,7 +198,7 @@ def display_centers_available_slots(result):
     for center in result['sessions']:
         age = int(center['min_age_limit'])
         capacity = int(center['available_capacity'])
-        if age == MIN_AGE and capacity >= MIN_CAPACITY center['center_id'] not in CENTERS:
+        if age == MIN_AGE and capacity >= MIN_CAPACITY and center['center_id'] not in CENTERS:
             print("Pincode : {}".format(center['pincode']))
             print("Center name : {}".format(center['name']))
             print("Address : {}".format(center['address']))
@@ -227,9 +227,10 @@ def main():
     global TXNID, BEARER_TOKEN
     TXNID = authenticate()
     BEARER_TOKEN = authorization(txnId=TXNID)
-
+    
+    session = requests.Session()
     while True:
-        findByDistrict(bearer_token=BEARER_TOKEN)
+        findByDistrict(bearer_token=BEARER_TOKEN, session=session)
         print("Trying again in 4 seconds seconds ......")
         wait_no_of_seconds(seconds=4)
 
